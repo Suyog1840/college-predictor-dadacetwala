@@ -163,15 +163,15 @@ def predict(student):
             probability = sigmoid(adjusted_margin)
 
             all_results.append({
-                "examType": examType,
-                "collegeCode": best_option["collegeCode"],
-                "collegeName": best_option["collegeName"],
-                "branchCode": best_option["branchCode"],
-                "branchName": best_option["branchName"],
-                "district": best_option["district"],
-                "weighted_cutoff": best_option["weighted_cutoff"],
-                "standard_cutoff": standard_cutoff,
-                "probability": round(probability * 100, 2)
+                "examType": str(examType),
+                "collegeCode": int(best_option["collegeCode"]),
+                "collegeName": str(best_option["collegeName"]),
+                "branchCode": str(best_option["branchCode"]),
+                "branchName": str(best_option["branchName"]) if best_option["branchName"] == best_option["branchName"] else "",
+                "district": str(best_option["district"]) if best_option["district"] == best_option["district"] else "",
+                "weighted_cutoff": float(best_option["weighted_cutoff"]),
+                "standard_cutoff": float(standard_cutoff),
+                "probability": round(float(probability) * 100, 2)
             })
 
     # ---------------- FILTER BY PROBABILITY ----------------

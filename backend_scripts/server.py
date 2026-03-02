@@ -2,7 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-import simulation_engine as se  # Import your existing simulation logic
+
+try:
+    # When running from the root repository (e.g. Railway / Production)
+    import backend_scripts.simulation_engine as se  
+except ImportError:
+    # When running locally inside the backend_scripts folder
+    import simulation_engine as se  
+
 
 app = FastAPI()
 

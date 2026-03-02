@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# We don't want to push massive archive files
+# archive_old_data/
+# archive_old_scripts/
+# AiPDFs/
+# StatePDFs/

@@ -180,9 +180,10 @@ def predict(student):
     all_results = [r for r in all_results if r["probability"] > 60.0]
 
     # ---------------- SORT ----------------
-    # Sort primarily by the intrinsic standard cutoff (GOPEN/AI value), then by highest probability
+    # Sort by probability descending: highest probability (safest) first, lowest last.
+    # Secondary sort by standard_cutoff to break ties with more prestigious college on top.
     all_results.sort(
-        key=lambda x: (x["standard_cutoff"], x["probability"]),
+        key=lambda x: (x["probability"], x["standard_cutoff"]),
         reverse=True
     )
 
@@ -206,7 +207,7 @@ def predict(student):
 if __name__ == "__main__":
     student = {
         "scores": {
-            "MHTCET": 72.0,
+            "MHTCET": 92.0,
             "JEE": 60.0
         },
         "category": "NT2",

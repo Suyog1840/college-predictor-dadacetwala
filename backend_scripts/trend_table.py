@@ -35,13 +35,15 @@ df[["baseCategory", "seatFlag"]] = df["category"].apply(
 # -----------------------
 # Prepare group keys
 # -----------------------
+# NOTE: 'round' is intentionally excluded from group_cols.
+# Including round creates too many micro-groups (1 entry each) that get dropped.
+# We aggregate all years AND rounds together to compute a stable weighted_cutoff.
 group_cols = [
     "collegeCode",
     "branchCode",
     "examType",
     "baseCategory",
     "seatFlag",
-    "round"  # Added round column for deeper granularity
 ]
 
 def get_weight(year, round_num, is_latest_year=False):
@@ -76,16 +78,27 @@ trend_rows = []
 
 for keys, group in df.groupby(group_cols):
 
-    group = group.sort_values("year")
+    group = group.sort_values(["year", "round"])
 
-    years = group["year"].values.reshape(-1, 1)
     cutoffs = group["closingPercentile"].values
 
+    # --- Single data point: use cutoff directly, no trend/volatility ---
     if len(cutoffs) < 2:
+        # 2025 R1 is the authoritative source — include these directly
+        # slope=0 means no trend adjustment; volatility=0 means no penalty
+        trend_rows.append({
+            "collegeCode": keys[0],
+            "branchCode": keys[1],
+            "examType": keys[2],
+            "baseCategory": keys[3],
+            "seatFlag": keys[4],
+            "weighted_cutoff": float(cutoffs[0]),
+            "trend_slope": 0.0,
+            "volatility": 0.0
+        })
         continue
 
-    weights_list = []
-    
+    # --- Multiple data points: compute weighted cutoff + regression ---
     weighted_sum = 0
     total_weight = 0
 
@@ -94,13 +107,13 @@ for keys, group in df.groupby(group_cols):
         w = get_weight(y, r, is_latest_year=(y == latest_year))
         weighted_sum += c * w
         total_weight += w
-        weights_list.append(w)
 
     weighted_cutoff = weighted_sum / total_weight if total_weight > 0 else cutoffs[-1]
 
     # -----------------------
-    # Trend slope (Linear Regression)
+    # Trend slope (Linear Regression) — use year as X
     # -----------------------
+    years = group["year"].values.reshape(-1, 1)
     model = LinearRegression()
     model.fit(years, cutoffs)
     slope = model.coef_[0]
@@ -116,13 +129,26 @@ for keys, group in df.groupby(group_cols):
         "examType": keys[2],
         "baseCategory": keys[3],
         "seatFlag": keys[4],
-        "round_captured": keys[5],
         "weighted_cutoff": weighted_cutoff,
         "trend_slope": slope,
         "volatility": volatility
     })
 
 trend_df = pd.DataFrame(trend_rows)
+
+# -----------------------
+# WHITELIST FILTER: Only keep combos present in 2025 Round 1
+# 2025 R1 is the authoritative list of currently active colleges/branches.
+# Colleges that participated in prior years but are absent from 2025 R1
+# (e.g. closed, delisted, or merged) must NOT be predicted.
+# -----------------------
+r1_2025 = df[(df["year"] == 2025) & (df["round"] == 1)]
+r1_combos = r1_2025[["collegeCode", "branchCode", "examType"]].drop_duplicates()
+
+before = len(trend_df)
+trend_df = trend_df.merge(r1_combos, on=["collegeCode", "branchCode", "examType"], how="inner")
+after = len(trend_df)
+print(f"Whitelist filter: kept {after} rows (removed {before - after} rows not in 2025 R1)")
 
 Path(OUTPUT_FILE).parent.mkdir(parents=True, exist_ok=True)
 trend_df.to_excel(OUTPUT_FILE, index=False)

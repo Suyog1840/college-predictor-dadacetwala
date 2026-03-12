@@ -141,7 +141,9 @@ def predict(student):
                 if not cat_row.empty:
                     candidate = cat_row.iloc[0]
                     margin = percentile - candidate["weighted_cutoff"]
-                    if margin >= -2:
+                    # Allow up to -8 margin so reach colleges are included;
+                    # the sigmoid will assign them a lower probability naturally.
+                    if margin >= -8:
                         adj_margin = margin - (candidate["trend_slope"] * 0.5)
                         if adj_margin > best_adj_margin:
                             best_adj_margin = adj_margin
@@ -175,15 +177,17 @@ def predict(student):
             })
 
     # ---------------- FILTER BY PROBABILITY ----------------
-    # Lowered the threshold to 50% to ensure we still show realistic reach matches,
-    # as 70% was too strict and filtered out good but slightly ambitious options.
-    all_results = [r for r in all_results if r["probability"] > 60.0]
+    # Keep anything with at least 45% chance - this includes good reach colleges.
+    # Too high a threshold (e.g. 60-70%) would only show the easiest/worst colleges.
+    all_results = [r for r in all_results if r["probability"] >= 45.0]
 
-    # ---------------- SORT ----------------
-    # Sort by probability descending: highest probability (safest) first, lowest last.
-    # Secondary sort by standard_cutoff to break ties with more prestigious college on top.
+    # ---------------- SORT BY PRESTIGE (standard_cutoff) ----------------
+    # Sort by standard_cutoff DESCENDING so the most prestigious/competitive colleges
+    # come first. Use probability as a tiebreaker within similar prestige tiers.
+    # This ensures we surface the BEST colleges the student can realistically get,
+    # not just the safest/easiest ones.
     all_results.sort(
-        key=lambda x: (x["probability"], x["standard_cutoff"]),
+        key=lambda x: (x["standard_cutoff"], x["probability"]),
         reverse=True
     )
 
@@ -198,7 +202,35 @@ def predict(student):
             seen_combos.add(combo_key)
             deduped_results.append(r)
 
-    return deduped_results[:5]
+    # ---------------- TIERED SELECTION ----------------
+    # Build a balanced top-5 across reach (45-65%), target (65-85%), and safe (85%+) tiers.
+    # This ensures students see aspirational colleges alongside safe bets.
+    reach   = [r for r in deduped_results if r["probability"] < 65.0]
+    target  = [r for r in deduped_results if 65.0 <= r["probability"] < 85.0]
+    safe    = [r for r in deduped_results if r["probability"] >= 85.0]
+
+    final = []
+    # Fill up to 5: prioritise target → safe → reach (best colleges in each tier first)
+    for pool in [target, safe, reach]:
+        for r in pool:
+            if len(final) >= 5:
+                break
+            combo_key = (r["collegeName"], r["branchName"])
+            if combo_key not in {(x["collegeName"], x["branchName"]) for x in final}:
+                final.append(r)
+        if len(final) >= 5:
+            break
+
+    # If we still have fewer than 5, top up from whatever remains
+    if len(final) < 5:
+        for r in deduped_results:
+            if len(final) >= 5:
+                break
+            combo_key = (r["collegeName"], r["branchName"])
+            if combo_key not in {(x["collegeName"], x["branchName"]) for x in final}:
+                final.append(r)
+
+    return final
 
 
 # -----------------------------------

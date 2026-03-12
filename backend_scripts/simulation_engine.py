@@ -200,8 +200,8 @@ def predict(student):
             seen_combos.add(combo_key)
             deduped_results.append(r)
 
-    # ---------------- TOP 5 ----------------
-    return deduped_results[:5]
+    # ---------------- TOP 10 ----------------
+    return deduped_results[:10]
 
 
 # -----------------------------------
@@ -224,7 +224,7 @@ if __name__ == "__main__":
 
     predictions = predict(student)
 
-    print("\n--- Overall Top 5 Matches ---")
+    print("\n--- Overall Top 10 Matches ---")
     if not predictions:
         print("No matches found.")
     for r in predictions:

@@ -177,60 +177,31 @@ def predict(student):
             })
 
     # ---------------- FILTER BY PROBABILITY ----------------
-    # Keep anything with at least 45% chance - this includes good reach colleges.
-    # Too high a threshold (e.g. 60-70%) would only show the easiest/worst colleges.
-    all_results = [r for r in all_results if r["probability"] >= 45.0]
+    # Keep colleges with at least 60% admission probability.
+    all_results = [r for r in all_results if r["probability"] >= 60.0]
 
-    # ---------------- SORT BY PRESTIGE (standard_cutoff) ----------------
-    # Sort by standard_cutoff DESCENDING so the most prestigious/competitive colleges
-    # come first. Use probability as a tiebreaker within similar prestige tiers.
-    # This ensures we surface the BEST colleges the student can realistically get,
-    # not just the safest/easiest ones.
+    # ---------------- SORT: best colleges first, higher probability as tiebreaker ----------------
+    # Primary sort: standard_cutoff (2025 Round 1 GOPEN/AI) DESCENDING → most prestigious colleges first.
+    # This prevents low-cutoff colleges from dominating just because they give 100% to high scorers.
+    # Secondary sort: probability DESCENDING → among equally prestigious colleges, higher chance ranks first.
     all_results.sort(
         key=lambda x: (x["standard_cutoff"], x["probability"]),
         reverse=True
     )
 
     # ---------------- DEDUPLICATE ----------------
-    # Filter combinations of college name and branch name, keeping the highest ranked one
+    # Keep the highest-ranked entry per (collegeName, branchName) combination.
     seen_combos = set()
     deduped_results = []
-    
+
     for r in all_results:
         combo_key = (r["collegeName"], r["branchName"])
         if combo_key not in seen_combos:
             seen_combos.add(combo_key)
             deduped_results.append(r)
 
-    # ---------------- TIERED SELECTION ----------------
-    # Build a balanced top-5 across reach (45-65%), target (65-85%), and safe (85%+) tiers.
-    # This ensures students see aspirational colleges alongside safe bets.
-    reach   = [r for r in deduped_results if r["probability"] < 65.0]
-    target  = [r for r in deduped_results if 65.0 <= r["probability"] < 85.0]
-    safe    = [r for r in deduped_results if r["probability"] >= 85.0]
-
-    final = []
-    # Fill up to 5: prioritise target → safe → reach (best colleges in each tier first)
-    for pool in [target, safe, reach]:
-        for r in pool:
-            if len(final) >= 5:
-                break
-            combo_key = (r["collegeName"], r["branchName"])
-            if combo_key not in {(x["collegeName"], x["branchName"]) for x in final}:
-                final.append(r)
-        if len(final) >= 5:
-            break
-
-    # If we still have fewer than 5, top up from whatever remains
-    if len(final) < 5:
-        for r in deduped_results:
-            if len(final) >= 5:
-                break
-            combo_key = (r["collegeName"], r["branchName"])
-            if combo_key not in {(x["collegeName"], x["branchName"]) for x in final}:
-                final.append(r)
-
-    return final
+    # ---------------- TOP 5 ----------------
+    return deduped_results[:5]
 
 
 # -----------------------------------
@@ -239,14 +210,14 @@ def predict(student):
 if __name__ == "__main__":
     student = {
         "scores": {
-            "MHTCET": 92.0,
+            "MHTCET": 98.0,
             "JEE": 60.0
         },
-        "category": "NT2",
+        "category": "OPEN",
         "gender": "Male",
         "homeUniversity": "Savitribai Phule Pune University",
         "branchPreference": [
-            "Electrical Engineering",
+            "Computer Engineering",
         ],
         "districtPreference": ["Pune"]
     }
